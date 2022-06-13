@@ -9,6 +9,7 @@
     "start": "node ./sandbox/server.js",
     "preversion": "grunt version && npm test",
     "build": "cross-env NODE_ENV=production grunt build",
+    "vite:build": "vite build",
     "examples": "node ./examples/server.js",
     "coveralls": "cat coverage/lcov.info | ./node_modules/coveralls/bin/coveralls.js",
     "fix": "eslint --fix lib/**/*.js"
@@ -79,6 +80,7 @@
     "tslib": "^2.4.0",
     "typescript": "^4.7.3",
     "url-search-params": "^0.10.0",
+    "vite": "^2.9.12",
     "webpack": "^4.44.2",
     "webpack-dev-server": "^3.11.0"
   },

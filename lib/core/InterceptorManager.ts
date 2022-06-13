@@ -10,7 +10,7 @@ export type Interceptor<V> = {
   runWhen?: (config: AxiosRequestConfig) => boolean
 } | null
 
-export class InterceptorManager<V> {
+export default class InterceptorManager<V> {
   handlers: Interceptor<V>[];
 
   constructor() {
