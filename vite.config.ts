@@ -1,5 +1,4 @@
 import { defineConfig } from 'vite'
-import nodePolyfills from 'rollup-plugin-polyfill-node';
 
 export default defineConfig({
   build: {
@@ -12,8 +11,13 @@ export default defineConfig({
     rollupOptions: {
       // 确保外部化处理那些你不想打包进库的依赖
       external: [
+        'form-data',
+        'stream',
         'proxy-from-env',
-        'form-data'
+        'http',
+        'https',
+        'url',
+        'zlib',
       ],
       output: {
         // 在 UMD 构建模式下为这些外部化的依赖提供一个全局变量
@@ -21,17 +25,6 @@ export default defineConfig({
           'form-data': 'FormData'
         }
       },
-      plugins: [
-        nodePolyfills({
-          include: [
-            'http',
-            'https',
-            'zlib',
-            'url',
-            'stream',
-          ]
-        })
-      ]
     }
   },
 })

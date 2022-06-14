@@ -1,4 +1,5 @@
 import FormData$1 from "form-data";
+import url$1 from "url";
 function bind(fn, thisArg) {
   return function wrap() {
     return fn.apply(thisArg, arguments);
@@ -418,20 +419,20 @@ prototype.toString = function toString2(encoder) {
 function encode(val) {
   return encodeURIComponent(val).replace(/%3A/gi, ":").replace(/%24/g, "$").replace(/%2C/gi, ",").replace(/%20/g, "+").replace(/%5B/gi, "[").replace(/%5D/gi, "]");
 }
-function buildURL(url, params, options) {
+function buildURL(url2, params, options) {
   if (!params) {
-    return url;
+    return url2;
   }
-  var hashmarkIndex = url.indexOf("#");
+  var hashmarkIndex = url2.indexOf("#");
   if (hashmarkIndex !== -1) {
-    url = url.slice(0, hashmarkIndex);
+    url2 = url2.slice(0, hashmarkIndex);
   }
   var _encode = options && options.encode || encode;
   var serializerParams = isURLSearchParams(params) ? params.toString() : new AxiosURLSearchParams(params, options).toString(_encode);
   if (serializerParams) {
-    url += (url.indexOf("?") === -1 ? "?" : "&") + serializerParams;
+    url2 += (url2.indexOf("?") === -1 ? "?" : "&") + serializerParams;
   }
-  return url;
+  return url2;
 }
 class InterceptorManager {
   constructor() {
@@ -479,11 +480,12 @@ var transitionalDefaults = {
   forcedJSONParsing: true,
   clarifyTimeoutError: false
 };
+var URLSearchParams = url$1.URLSearchParams;
 var AxiosNode = {
   isNode: true,
   classes: {
-    URLSearchParams: require("./classes/URLSearchParams"),
-    FormData: require("./classes/FormData"),
+    URLSearchParams,
+    FormData: FormData$1,
     Blob: typeof Blob !== "undefined" && Blob || null
   },
   protocols: ["http", "https", "file", "data"]
@@ -548,6 +550,634 @@ function formDataToJSON(formData) {
   }
   return null;
 }
+function settle(resolve, reject, response) {
+  const { validateStatus: validateStatus2 } = response.config;
+  if (!response.status || !validateStatus2 || validateStatus2(response.status)) {
+    resolve(response);
+  } else {
+    reject(new AxiosError("Request failed with status code " + response.status, [AxiosError.ERR_BAD_REQUEST, AxiosError.ERR_BAD_RESPONSE][Math.floor(response.status / 100) - 4], response.config, response.request, response));
+  }
+}
+var cookies = isStandardBrowserEnv() ? function standardBrowserEnv() {
+  return {
+    write: function write(name, value, expires, path, domain, secure) {
+      var cookie = [];
+      cookie.push(name + "=" + encodeURIComponent(value));
+      if (isNumber(expires)) {
+        cookie.push("expires=" + new Date(expires).toGMTString());
+      }
+      if (isString(path)) {
+        cookie.push("path=" + path);
+      }
+      if (isString(domain)) {
+        cookie.push("domain=" + domain);
+      }
+      if (secure === true) {
+        cookie.push("secure");
+      }
+      document.cookie = cookie.join("; ");
+    },
+    read: function read(name) {
+      var match = document.cookie.match(new RegExp("(^|;\\s*)(" + name + ")=([^;]*)"));
+      return match ? decodeURIComponent(match[3]) : null;
+    },
+    remove: function remove(name) {
+      this.write(name, "", Date.now() - 864e5);
+    }
+  };
+}() : function nonStandardBrowserEnv() {
+  return {
+    write: function write() {
+    },
+    read: function read() {
+      return null;
+    },
+    remove: function remove() {
+    }
+  };
+}();
+function isAbsoluteURL(url2) {
+  return /^([a-z][a-z\d+\-.]*:)?\/\//i.test(url2);
+}
+function combineURLs(baseURL, relativeURL) {
+  return relativeURL ? baseURL.replace(/\/+$/, "") + "/" + relativeURL.replace(/^\/+/, "") : baseURL;
+}
+function buildFullPath(baseURL, requestedURL) {
+  if (baseURL && !isAbsoluteURL(requestedURL)) {
+    return combineURLs(baseURL, requestedURL);
+  }
+  return requestedURL;
+}
+var ignoreDuplicateOf = [
+  "age",
+  "authorization",
+  "content-length",
+  "content-type",
+  "etag",
+  "expires",
+  "from",
+  "host",
+  "if-modified-since",
+  "if-unmodified-since",
+  "last-modified",
+  "location",
+  "max-forwards",
+  "proxy-authorization",
+  "referer",
+  "retry-after",
+  "user-agent"
+];
+function parseHeaders(headers) {
+  var parsed = {};
+  var key;
+  var val;
+  var i;
+  if (!headers) {
+    return parsed;
+  }
+  forEach(headers.split("\n"), function parser(line) {
+    i = line.indexOf(":");
+    key = trim(line.slice(0, i)).toLowerCase();
+    val = trim(line.slice(i + 1));
+    if (key) {
+      if (parsed[key] && ignoreDuplicateOf.indexOf(key) >= 0) {
+        return;
+      }
+      if (key === "set-cookie") {
+        parsed[key] = (parsed[key] ? parsed[key] : []).concat([val]);
+      } else {
+        parsed[key] = parsed[key] ? parsed[key] + ", " + val : val;
+      }
+    }
+  });
+  return parsed;
+}
+var isURLSameOrigin = isStandardBrowserEnv() ? function standardBrowserEnv2() {
+  var msie = /(msie|trident)/i.test(navigator.userAgent);
+  var urlParsingNode = document.createElement("a");
+  var originURL;
+  function resolveURL(url2) {
+    var href = url2;
+    if (msie) {
+      urlParsingNode.setAttribute("href", href);
+      href = urlParsingNode.href;
+    }
+    urlParsingNode.setAttribute("href", href);
+    return {
+      href: urlParsingNode.href,
+      protocol: urlParsingNode.protocol ? urlParsingNode.protocol.replace(/:$/, "") : "",
+      host: urlParsingNode.host,
+      search: urlParsingNode.search ? urlParsingNode.search.replace(/^\?/, "") : "",
+      hash: urlParsingNode.hash ? urlParsingNode.hash.replace(/^#/, "") : "",
+      hostname: urlParsingNode.hostname,
+      port: urlParsingNode.port,
+      pathname: urlParsingNode.pathname.charAt(0) === "/" ? urlParsingNode.pathname : "/" + urlParsingNode.pathname
+    };
+  }
+  originURL = resolveURL(window.location.href);
+  return function isURLSameOrigin2(requestURL) {
+    var parsed = isString(requestURL) ? resolveURL(requestURL) : requestURL;
+    return parsed.protocol === originURL.protocol && parsed.host === originURL.host;
+  };
+}() : function nonStandardBrowserEnv2() {
+  return function isURLSameOrigin2() {
+    return true;
+  };
+}();
+class CanceledError extends AxiosError {
+  constructor(message = "canceled", config, request2) {
+    super(message, AxiosError.ERR_CANCELED, config, request2);
+  }
+}
+Object.defineProperty(CanceledError.prototype, "__CANCEL__", { value: true });
+function parseProtocol(url2) {
+  var match = /^([-+\w]{1,25})(:?\/\/|:)/.exec(url2);
+  return match && match[1] || "";
+}
+function xhrAdapter(config) {
+  return new Promise(function dispatchXhrRequest(resolve, reject) {
+    var requestData = config.data;
+    var requestHeaders = config.headers;
+    var responseType = config.responseType;
+    var onCanceled;
+    function done() {
+      if (config.cancelToken) {
+        config.cancelToken.unsubscribe(onCanceled);
+      }
+      if (config.signal) {
+        config.signal.removeEventListener("abort", onCanceled);
+      }
+    }
+    if (isFormData(requestData) && isStandardBrowserEnv()) {
+      delete requestHeaders["Content-Type"];
+    }
+    var request2 = new XMLHttpRequest();
+    if (config.auth) {
+      var username = config.auth.username || "";
+      var password = config.auth.password ? unescape(encodeURIComponent(config.auth.password)) : "";
+      requestHeaders.Authorization = "Basic " + btoa(username + ":" + password);
+    }
+    var fullPath = buildFullPath(config.baseURL, config.url);
+    request2.open(config.method.toUpperCase(), buildURL(fullPath, config.params, config.paramsSerializer), true);
+    request2.timeout = config.timeout;
+    function onloadend() {
+      if (!request2) {
+        return;
+      }
+      var responseHeaders = "getAllResponseHeaders" in request2 ? parseHeaders(request2.getAllResponseHeaders()) : null;
+      var responseData = !responseType || responseType === "text" || responseType === "json" ? request2.responseText : request2.response;
+      var response = {
+        data: responseData,
+        status: request2.status,
+        statusText: request2.statusText,
+        headers: responseHeaders,
+        config,
+        request: request2
+      };
+      settle(function _resolve(value) {
+        resolve(value);
+        done();
+      }, function _reject(err) {
+        reject(err);
+        done();
+      }, response);
+      request2 = null;
+    }
+    if ("onloadend" in request2) {
+      request2.onloadend = onloadend;
+    } else {
+      request2.onreadystatechange = function handleLoad() {
+        if (!request2 || request2.readyState !== 4) {
+          return;
+        }
+        if (request2.status === 0 && !(request2.responseURL && request2.responseURL.indexOf("file:") === 0)) {
+          return;
+        }
+        setTimeout(onloadend);
+      };
+    }
+    request2.onabort = function handleAbort() {
+      if (!request2) {
+        return;
+      }
+      reject(new AxiosError("Request aborted", AxiosError.ECONNABORTED, config, request2));
+      request2 = null;
+    };
+    request2.onerror = function handleError() {
+      reject(new AxiosError("Network Error", AxiosError.ERR_NETWORK, config, request2));
+      request2 = null;
+    };
+    request2.ontimeout = function handleTimeout() {
+      var timeoutErrorMessage = config.timeout ? "timeout of " + config.timeout + "ms exceeded" : "timeout exceeded";
+      var transitional2 = config.transitional || transitionalDefaults;
+      if (config.timeoutErrorMessage) {
+        timeoutErrorMessage = config.timeoutErrorMessage;
+      }
+      reject(new AxiosError(timeoutErrorMessage, transitional2.clarifyTimeoutError ? AxiosError.ETIMEDOUT : AxiosError.ECONNABORTED, config, request2));
+      request2 = null;
+    };
+    if (isStandardBrowserEnv()) {
+      var xsrfValue = (config.withCredentials || isURLSameOrigin(fullPath)) && config.xsrfCookieName ? cookies.read(config.xsrfCookieName) : void 0;
+      if (xsrfValue) {
+        requestHeaders[config.xsrfHeaderName] = xsrfValue;
+      }
+    }
+    if ("setRequestHeader" in request2) {
+      forEach(requestHeaders, function setRequestHeader(val, key) {
+        if (typeof requestData === "undefined" && key.toLowerCase() === "content-type") {
+          delete requestHeaders[key];
+        } else {
+          request2.setRequestHeader(key, val);
+        }
+      });
+    }
+    if (!isUndefined(config.withCredentials)) {
+      request2.withCredentials = !!config.withCredentials;
+    }
+    if (responseType && responseType !== "json") {
+      request2.responseType = config.responseType;
+    }
+    if (typeof config.onDownloadProgress === "function") {
+      request2.addEventListener("progress", config.onDownloadProgress);
+    }
+    if (typeof config.onUploadProgress === "function" && request2.upload) {
+      request2.upload.addEventListener("progress", config.onUploadProgress);
+    }
+    if (config.cancelToken || config.signal) {
+      onCanceled = function(cancel) {
+        if (!request2) {
+          return;
+        }
+        reject(!cancel || cancel.type ? new CanceledError(null, config, req) : cancel);
+        request2.abort();
+        request2 = null;
+      };
+      config.cancelToken && config.cancelToken.subscribe(onCanceled);
+      if (config.signal) {
+        config.signal.aborted ? onCanceled() : config.signal.addEventListener("abort", onCanceled);
+      }
+    }
+    if (!requestData) {
+      requestData = null;
+    }
+    var protocol = parseProtocol(fullPath);
+    if (protocol && AxiosNode.protocols.indexOf(protocol) === -1) {
+      reject(new AxiosError("Unsupported protocol " + protocol + ":", AxiosError.ERR_BAD_REQUEST, config));
+      return;
+    }
+    request2.send(requestData);
+  });
+}
+const version = "1.0.0-alpha.1";
+var DATA_URL_PATTERN = /^(?:([^;]+);)?(?:[^;]+;)?(base64|),([\s\S]*)$/;
+function fromDataURI(uri, asBlob, options) {
+  var _Blob = options && options.Blob || AxiosNode.classes.Blob;
+  var protocol = parseProtocol(uri);
+  if (asBlob === void 0 && _Blob) {
+    asBlob = true;
+  }
+  if (protocol === "data") {
+    uri = protocol.length ? uri.slice(protocol.length + 1) : uri;
+    var match = DATA_URL_PATTERN.exec(uri);
+    if (!match) {
+      throw new AxiosError("Invalid URL", AxiosError.ERR_INVALID_URL);
+    }
+    var mime = match[1];
+    var isBase64 = match[2];
+    var body = match[3];
+    var buffer = Buffer.from(decodeURIComponent(body), isBase64 ? "base64" : "utf8");
+    if (asBlob) {
+      if (!_Blob) {
+        throw new AxiosError("Blob is not supported", AxiosError.ERR_NOT_SUPPORT);
+      }
+      return new _Blob([buffer], { type: mime });
+    }
+    return buffer;
+  }
+  throw new AxiosError("Unsupported protocol " + protocol, AxiosError.ERR_NOT_SUPPORT);
+}
+const stream = require("stream");
+const { getProxyForUrl } = require("proxy-from-env");
+const httpFollow = require("follow-redirects/http");
+const httpsFollow = require("follow-redirects/https");
+const http = require("http");
+const https = require("https");
+const url = require("url");
+const zlib = require("zlib");
+var isHttps = /https:?/;
+var supportedProtocols = AxiosNode.protocols.map(function(protocol) {
+  return protocol + ":";
+});
+function dispatchBeforeRedirect(options) {
+  if (options.beforeRedirects.proxy) {
+    options.beforeRedirects.proxy(options);
+  }
+  if (options.beforeRedirects.config) {
+    options.beforeRedirects.config(options);
+  }
+}
+function setProxy(options, configProxy, location) {
+  var proxy = configProxy;
+  if (!proxy && proxy !== false) {
+    var proxyUrl = getProxyForUrl(location);
+    if (proxyUrl) {
+      proxy = url.parse(proxyUrl);
+      proxy.host = proxy.hostname;
+    }
+  }
+  if (proxy) {
+    if (proxy.auth) {
+      if (proxy.auth.username || proxy.auth.password) {
+        proxy.auth = (proxy.auth.username || "") + ":" + (proxy.auth.password || "");
+      }
+      var base64 = Buffer.from(proxy.auth, "utf8").toString("base64");
+      options.headers["Proxy-Authorization"] = "Basic " + base64;
+    }
+    options.headers.host = options.hostname + (options.port ? ":" + options.port : "");
+    options.hostname = proxy.host;
+    options.host = proxy.host;
+    options.port = proxy.port;
+    options.path = location;
+    if (proxy.protocol) {
+      options.protocol = proxy.protocol;
+    }
+  }
+  options.beforeRedirects.proxy = function beforeRedirect(redirectOptions) {
+    setProxy(redirectOptions, configProxy, redirectOptions.href);
+  };
+}
+function httpAdapter(config) {
+  return new Promise(function dispatchHttpRequest(resolvePromise, rejectPromise) {
+    var onCanceled;
+    function done() {
+      if (config.cancelToken) {
+        config.cancelToken.unsubscribe(onCanceled);
+      }
+      if (config.signal) {
+        config.signal.removeEventListener("abort", onCanceled);
+      }
+    }
+    var resolve = function resolve2(value) {
+      done();
+      resolvePromise(value);
+    };
+    var rejected = false;
+    var reject = function reject2(value) {
+      done();
+      rejected = true;
+      rejectPromise(value);
+    };
+    var data = config.data;
+    var responseType = config.responseType;
+    var responseEncoding = config.responseEncoding;
+    var method = config.method.toUpperCase();
+    var fullPath = buildFullPath(config.baseURL, config.url);
+    var parsed = url.parse(fullPath);
+    var protocol = parsed.protocol || supportedProtocols[0];
+    if (protocol === "data:") {
+      var convertedData;
+      if (method !== "GET") {
+        return settle(resolve, reject, {
+          status: 405,
+          statusText: "method not allowed",
+          headers: {},
+          config
+        });
+      }
+      try {
+        convertedData = fromDataURI(config.url, responseType === "blob", {
+          Blob: config.env && config.env.Blob
+        });
+      } catch (err) {
+        throw AxiosError.from(err, AxiosError.ERR_BAD_REQUEST, config);
+      }
+      if (responseType === "text") {
+        convertedData = convertedData.toString(responseEncoding);
+        if (!responseEncoding || responseEncoding === "utf8") {
+          data = stripBOM(convertedData);
+        }
+      } else if (responseType === "stream") {
+        convertedData = stream.Readable.from(convertedData);
+      }
+      return settle(resolve, reject, {
+        data: convertedData,
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config
+      });
+    }
+    if (supportedProtocols.indexOf(protocol) === -1) {
+      return reject(new AxiosError("Unsupported protocol " + protocol, AxiosError.ERR_BAD_REQUEST, config));
+    }
+    var headers = config.headers;
+    var headerNames = {};
+    Object.keys(headers).forEach(function storeLowerName(name) {
+      headerNames[name.toLowerCase()] = name;
+    });
+    if ("user-agent" in headerNames) {
+      if (!headers[headerNames["user-agent"]]) {
+        delete headers[headerNames["user-agent"]];
+      }
+    } else {
+      headers["User-Agent"] = "axios/" + version;
+    }
+    if (isFormData(data) && isFunction(data.getHeaders)) {
+      Object.assign(headers, data.getHeaders());
+    } else if (data && !isStream(data)) {
+      if (Buffer.isBuffer(data))
+        ;
+      else if (isArrayBuffer(data)) {
+        data = Buffer.from(new Uint8Array(data));
+      } else if (isString(data)) {
+        data = Buffer.from(data, "utf-8");
+      } else {
+        return reject(new AxiosError("Data after transformation must be a string, an ArrayBuffer, a Buffer, or a Stream", AxiosError.ERR_BAD_REQUEST, config));
+      }
+      if (config.maxBodyLength > -1 && data.length > config.maxBodyLength) {
+        return reject(new AxiosError("Request body larger than maxBodyLength limit", AxiosError.ERR_BAD_REQUEST, config));
+      }
+      if (!headerNames["content-length"]) {
+        headers["Content-Length"] = data.length;
+      }
+    }
+    var auth = void 0;
+    if (config.auth) {
+      var username = config.auth.username || "";
+      var password = config.auth.password || "";
+      auth = username + ":" + password;
+    }
+    if (!auth && parsed.auth) {
+      var urlAuth = parsed.auth.split(":");
+      var urlUsername = urlAuth[0] || "";
+      var urlPassword = urlAuth[1] || "";
+      auth = urlUsername + ":" + urlPassword;
+    }
+    if (auth && headerNames.authorization) {
+      delete headers[headerNames.authorization];
+    }
+    try {
+      buildURL(parsed.path, config.params, config.paramsSerializer).replace(/^\?/, "");
+    } catch (err) {
+      var customErr = new Error(err.message);
+      customErr.config = config;
+      customErr.url = config.url;
+      customErr.exists = true;
+      reject(customErr);
+    }
+    var options = {
+      path: buildURL(parsed.path, config.params, config.paramsSerializer).replace(/^\?/, ""),
+      method,
+      headers,
+      agents: { http: config.httpAgent, https: config.httpsAgent },
+      auth,
+      protocol,
+      beforeRedirect: dispatchBeforeRedirect,
+      beforeRedirects: {}
+    };
+    if (config.socketPath) {
+      options.socketPath = config.socketPath;
+    } else {
+      options.hostname = parsed.hostname;
+      options.port = parsed.port;
+      setProxy(options, config.proxy, protocol + "//" + parsed.hostname + (parsed.port ? ":" + parsed.port : "") + options.path);
+    }
+    var transport;
+    var isHttpsRequest = isHttps.test(options.protocol);
+    options.agent = isHttpsRequest ? config.httpsAgent : config.httpAgent;
+    if (config.transport) {
+      transport = config.transport;
+    } else if (config.maxRedirects === 0) {
+      transport = isHttpsRequest ? https : http;
+    } else {
+      if (config.maxRedirects) {
+        options.maxRedirects = config.maxRedirects;
+      }
+      if (config.beforeRedirect) {
+        options.beforeRedirects.config = config.beforeRedirect;
+      }
+      transport = isHttpsRequest ? httpsFollow : httpFollow;
+    }
+    if (config.maxBodyLength > -1) {
+      options.maxBodyLength = config.maxBodyLength;
+    } else {
+      options.maxBodyLength = Infinity;
+    }
+    if (config.insecureHTTPParser) {
+      options.insecureHTTPParser = config.insecureHTTPParser;
+    }
+    var req2 = transport.request(options, function handleResponse(res) {
+      if (req2.aborted)
+        return;
+      var responseStream = res;
+      var lastRequest = res.req || req2;
+      if (config.decompress !== false) {
+        if (data && data.length === 0 && res.headers["content-encoding"]) {
+          delete res.headers["content-encoding"];
+        }
+        switch (res.headers["content-encoding"]) {
+          case "gzip":
+          case "compress":
+          case "deflate":
+            responseStream = responseStream.pipe(zlib.createUnzip());
+            delete res.headers["content-encoding"];
+            break;
+        }
+      }
+      var response = {
+        status: res.statusCode,
+        statusText: res.statusMessage,
+        headers: res.headers,
+        config,
+        request: lastRequest
+      };
+      if (responseType === "stream") {
+        response.data = responseStream;
+        settle(resolve, reject, response);
+      } else {
+        var responseBuffer = [];
+        var totalResponseBytes = 0;
+        responseStream.on("data", function handleStreamData(chunk) {
+          responseBuffer.push(chunk);
+          totalResponseBytes += chunk.length;
+          if (config.maxContentLength > -1 && totalResponseBytes > config.maxContentLength) {
+            rejected = true;
+            responseStream.destroy();
+            reject(new AxiosError("maxContentLength size of " + config.maxContentLength + " exceeded", AxiosError.ERR_BAD_RESPONSE, config, lastRequest));
+          }
+        });
+        responseStream.on("aborted", function handlerStreamAborted() {
+          if (rejected) {
+            return;
+          }
+          responseStream.destroy();
+          reject(new AxiosError("maxContentLength size of " + config.maxContentLength + " exceeded", AxiosError.ERR_BAD_RESPONSE, config, lastRequest));
+        });
+        responseStream.on("error", function handleStreamError(err) {
+          if (req2.aborted)
+            return;
+          reject(AxiosError.from(err, null, config, lastRequest));
+        });
+        responseStream.on("end", function handleStreamEnd() {
+          try {
+            var responseData = responseBuffer.length === 1 ? responseBuffer[0] : Buffer.concat(responseBuffer);
+            if (responseType !== "arraybuffer") {
+              responseData = responseData.toString(responseEncoding);
+              if (!responseEncoding || responseEncoding === "utf8") {
+                responseData = stripBOM(responseData);
+              }
+            }
+            response.data = responseData;
+          } catch (err) {
+            reject(AxiosError.from(err, null, config, response.request, response));
+          }
+          settle(resolve, reject, response);
+        });
+      }
+    });
+    req2.on("error", function handleRequestError(err) {
+      reject(AxiosError.from(err, null, config, req2));
+    });
+    req2.on("socket", function handleRequestSocket(socket) {
+      socket.setKeepAlive(true, 1e3 * 60);
+    });
+    if (config.timeout) {
+      var timeout = parseInt(config.timeout, 10);
+      if (isNaN(timeout)) {
+        reject(new AxiosError("error trying to parse `config.timeout` to int", AxiosError.ERR_BAD_OPTION_VALUE, config, req2));
+        return;
+      }
+      req2.setTimeout(timeout, function handleRequestTimeout() {
+        req2.abort();
+        var timeoutErrorMessage = config.timeout ? "timeout of " + config.timeout + "ms exceeded" : "timeout exceeded";
+        var transitional2 = config.transitional || transitionalDefaults;
+        if (config.timeoutErrorMessage) {
+          timeoutErrorMessage = config.timeoutErrorMessage;
+        }
+        reject(new AxiosError(timeoutErrorMessage, transitional2.clarifyTimeoutError ? AxiosError.ETIMEDOUT : AxiosError.ECONNABORTED, config, req2));
+      });
+    }
+    if (config.cancelToken || config.signal) {
+      onCanceled = function(cancel) {
+        if (req2.aborted)
+          return;
+        req2.abort();
+        reject(!cancel || cancel.type ? new CanceledError(null, config, req2) : cancel);
+      };
+      config.cancelToken && config.cancelToken.subscribe(onCanceled);
+      if (config.signal) {
+        config.signal.aborted ? onCanceled() : config.signal.addEventListener("abort", onCanceled);
+      }
+    }
+    if (isStream(data)) {
+      data.on("error", function handleStreamError(err) {
+        reject(AxiosError.from(err, config, null, req2));
+      }).pipe(req2);
+    } else {
+      req2.end(data);
+    }
+  });
+}
 var DEFAULT_CONTENT_TYPE = {
   "Content-Type": "application/x-www-form-urlencoded"
 };
@@ -559,9 +1189,9 @@ function setContentTypeIfUnset(headers, value) {
 function getDefaultAdapter() {
   var adapter;
   if (typeof XMLHttpRequest !== "undefined") {
-    adapter = require("../adapters/xhr");
+    adapter = xhrAdapter;
   } else if (typeof process !== "undefined" && Object.prototype.toString.call(process) === "[object process]") {
-    adapter = require("../adapters/http");
+    adapter = httpAdapter;
   }
   return adapter;
 }
@@ -677,12 +1307,6 @@ function transformData(data, headers, status, fns) {
 function isCancel(value) {
   return !!(value && value.__CANCEL__);
 }
-class CanceledError extends AxiosError {
-  constructor(message = "canceled", config, request2) {
-    super(message, AxiosError.ERR_CANCELED, config, request2);
-  }
-}
-Object.defineProperty(CanceledError.prototype, "__CANCEL__", { value: true });
 function throwIfCancellationRequested(config) {
   if (config.cancelToken) {
     config.cancelToken.throwIfRequested();
@@ -791,19 +1415,6 @@ function mergeConfig(config1, config2) {
   });
   return config;
 }
-function isAbsoluteURL(url) {
-  return /^([a-z][a-z\d+\-.]*:)?\/\//i.test(url);
-}
-function combineURLs(baseURL, relativeURL) {
-  return relativeURL ? baseURL.replace(/\/+$/, "") + "/" + relativeURL.replace(/^\/+/, "") : baseURL;
-}
-function buildFullPath(baseURL, requestedURL) {
-  if (baseURL && !isAbsoluteURL(requestedURL)) {
-    return combineURLs(baseURL, requestedURL);
-  }
-  return requestedURL;
-}
-const version = "1.0.0-alpha.1";
 var validators$1 = {};
 ["object", "boolean", "number", "function", "string", "symbol"].forEach(function(type, i) {
   validators$1[type] = function validator2(thing) {
@@ -934,23 +1545,23 @@ Axios.prototype.getUri = function getUri(config) {
   return buildURL(fullPath, config.params, config.paramsSerializer);
 };
 forEach(["delete", "get", "head", "options"], function forEachMethodNoData2(method) {
-  Axios.prototype[method] = function(url, config) {
+  Axios.prototype[method] = function(url2, config) {
     return this.request(mergeConfig(config || {}, {
       method,
-      url,
+      url: url2,
       data: (config || {}).data
     }));
   };
 });
 forEach(["post", "put", "patch"], function forEachMethodWithData2(method) {
   function generateHTTPMethod(isForm) {
-    return function httpMethod(url, data, config) {
+    return function httpMethod(url2, data, config) {
       return this.request(mergeConfig(config || {}, {
         method,
         headers: isForm ? {
           "Content-Type": "multipart/form-data"
         } : {},
-        url,
+        url: url2,
         data
       }));
     };
