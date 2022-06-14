@@ -1,1 +1,1 @@
-module.exports = require('./lib/axios');
+export * from './lib/axios';
